@@ -26,6 +26,30 @@
       margin-bottom: 24px;
       border-bottom: 2px solid #000;
       padding-bottom: 8px;
+      display: flex;
+      align-items: baseline;
+      gap: 12px;
+    }
+
+    #title-input {
+      font-family: monospace;
+      font-size: 1.4rem;
+      font-weight: bold;
+      border: none;
+      border-bottom: 1px solid #ccc;
+      outline: none;
+      width: 220px;
+      color: #000;
+      background: transparent;
+    }
+
+    #title-input::placeholder {
+      font-weight: normal;
+      color: #bbb;
+    }
+
+    #title-print {
+      display: none;
     }
 
     button {
@@ -143,6 +167,7 @@
     }
 
     #search-results {
+      display: none;
       border: 1px solid #000;
       max-height: 180px;
       overflow-y: auto;
@@ -196,8 +221,13 @@
       .toolbar,
       .modal-overlay,
       .btn-delete,
-      .no-print {
+      .no-print,
+      #title-input {
         display: none !important;
+      }
+
+      #title-print {
+        display: inline;
       }
 
       body {
@@ -212,7 +242,7 @@
 </head>
 <body>
 
-  <h1>Inventory</h1>
+  <h1>Inventory <input type="text" id="title-input" placeholder="-- name --" maxlength="40" /><span id="title-print"></span></h1>
 
   <div class="toolbar">
     <button onclick="openModal()">Add Item</button>
@@ -246,6 +276,7 @@
         id="search-input"
         placeholder="Type to search..."
         oninput="onSearch()"
+        onfocus="onFocusSearch()"
         autocomplete="off"
       />
 
@@ -279,6 +310,19 @@
 
     let inventory = JSON.parse(localStorage.getItem("inventory") || "[]");
     let selectedItem = null;
+
+    // Title input
+    const titleInput = document.getElementById("title-input");
+    const titlePrint = document.getElementById("title-print");
+
+    function updateTitle() {
+      localStorage.setItem("inventoryTitle", titleInput.value);
+      titlePrint.textContent = titleInput.value ? " " + titleInput.value : "";
+    }
+
+    titleInput.value = localStorage.getItem("inventoryTitle") || "";
+    titlePrint.textContent = titleInput.value ? " " + titleInput.value : "";
+    titleInput.addEventListener("input", updateTitle);
 
     function save() {
       localStorage.setItem("inventory", JSON.stringify(inventory));
@@ -320,13 +364,37 @@
       render();
     }
 
+    function showDefaultResults() {
+      const container = document.getElementById("search-results");
+      container.innerHTML = "";
+      ITEM_LIST.slice(0, 5).forEach(item => {
+        const div = document.createElement("div");
+        div.className = "result-item";
+        div.textContent = item;
+        div.onclick = () => selectResult(div, item);
+        container.appendChild(div);
+      });
+      container.style.display = "block";
+    }
+
+    function hideResults() {
+      document.getElementById("search-results").style.display = "none";
+    }
+
+    function onFocusSearch() {
+      if (!document.getElementById("search-input").value.trim()) {
+        showDefaultResults();
+      } else {
+        document.getElementById("search-results").style.display = "block";
+      }
+    }
+
     function openModal() {
       selectedItem = null;
       document.getElementById("search-input").value = "";
       document.getElementById("qty-input").value = "1";
-      document.getElementById("search-results").innerHTML = "";
+      hideResults();
       document.getElementById("modal-overlay").classList.add("open");
-      document.getElementById("search-input").focus();
     }
 
     function closeModal() {
@@ -339,7 +407,7 @@
       container.innerHTML = "";
       selectedItem = null;
 
-      if (!query) return;
+      if (!query) { showDefaultResults(); return; }
 
       const matches = ITEM_LIST.filter(item =>
         item.toLowerCase().includes(query)
@@ -356,6 +424,8 @@
       if (matches.length === 0) {
         container.innerHTML = '<div style="padding:8px 10px;font-size:0.85rem;color:#888;">No results.</div>';
       }
+
+      container.style.display = "block";
     }
 
     function selectResult(el, item) {
@@ -400,6 +470,19 @@
         .replace(/>/g, "&gt;")
         .replace(/"/g, "&quot;");
     }
+
+    // Hide search results when focus leaves the search area
+    document.getElementById("search-input").addEventListener("blur", () => {
+      setTimeout(hideResults, 150);
+    });
+
+    // Mouse wheel on quantity input
+    document.getElementById("qty-input").addEventListener("wheel", e => {
+      e.preventDefault();
+      const input = document.getElementById("qty-input");
+      const current = parseInt(input.value, 10) || 1;
+      input.value = e.deltaY < 0 ? current + 1 : Math.max(1, current - 1);
+    }, { passive: false });
 
     // Close modal on Escape
     document.addEventListener("keydown", e => {
