@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Inventory</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: monospace;
+      background: #fff;
+      color: #000;
+      padding: 40px;
+      max-width: 700px;
+      margin: 0 auto;
+    }
+
+    h1 {
+      font-size: 1.4rem;
+      font-weight: bold;
+      margin-bottom: 24px;
+      border-bottom: 2px solid #000;
+      padding-bottom: 8px;
+    }
+
+    button {
+      font-family: monospace;
+      font-size: 0.9rem;
+      background: #000;
+      color: #fff;
+      border: none;
+      padding: 6px 14px;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background: #333;
+    }
+
+    button.secondary {
+      background: #fff;
+      color: #000;
+      border: 1px solid #000;
+    }
+
+    button.secondary:hover {
+      background: #f0f0f0;
+    }
+
+    /* --- Inventarliste --- */
+
+    #inventory-list {
+      margin-top: 24px;
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    #inventory-list th,
+    #inventory-list td {
+      text-align: left;
+      padding: 8px 10px;
+      border-bottom: 1px solid #ccc;
+      font-size: 0.9rem;
+    }
+
+    #inventory-list th {
+      font-weight: bold;
+      border-bottom: 2px solid #000;
+    }
+
+    #inventory-list td:last-child {
+      text-align: right;
+    }
+
+    #inventory-list th:last-child {
+      text-align: right;
+    }
+
+    .empty-note {
+      margin-top: 24px;
+      font-size: 0.85rem;
+      color: #888;
+    }
+
+    /* --- Toolbar --- */
+
+    .toolbar {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    /* --- Modal Overlay --- */
+
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.5);
+      justify-content: center;
+      align-items: center;
+      z-index: 100;
+    }
+
+    .modal-overlay.open {
+      display: flex;
+    }
+
+    .modal {
+      background: #fff;
+      border: 2px solid #000;
+      padding: 24px;
+      width: 400px;
+      max-width: 95vw;
+    }
+
+    .modal h2 {
+      font-size: 1rem;
+      margin-bottom: 16px;
+      font-weight: bold;
+    }
+
+    .modal label {
+      display: block;
+      font-size: 0.8rem;
+      margin-bottom: 4px;
+    }
+
+    .modal input[type="text"],
+    .modal input[type="number"] {
+      font-family: monospace;
+      font-size: 0.9rem;
+      width: 100%;
+      border: 1px solid #000;
+      padding: 6px 8px;
+      outline: none;
+      margin-bottom: 12px;
+    }
+
+    #search-results {
+      border: 1px solid #000;
+      max-height: 180px;
+      overflow-y: auto;
+      margin-bottom: 12px;
+    }
+
+    .result-item {
+      padding: 7px 10px;
+      cursor: pointer;
+      font-size: 0.88rem;
+      border-bottom: 1px solid #eee;
+    }
+
+    .result-item:last-child {
+      border-bottom: none;
+    }
+
+    .result-item:hover,
+    .result-item.selected {
+      background: #000;
+      color: #fff;
+    }
+
+    .modal-actions {
+      display: flex;
+      gap: 8px;
+      justify-content: flex-end;
+      margin-top: 4px;
+    }
+
+    /* --- Delete button in table --- */
+
+    .btn-delete {
+      background: #fff;
+      color: #000;
+      border: 1px solid #000;
+      padding: 3px 9px;
+      font-family: monospace;
+      font-size: 0.8rem;
+      cursor: pointer;
+    }
+
+    .btn-delete:hover {
+      background: #000;
+      color: #fff;
+    }
+
+    /* --- Print styles --- */
+
+    @media print {
+      .toolbar,
+      .modal-overlay,
+      .btn-delete,
+      .no-print {
+        display: none !important;
+      }
+
+      body {
+        padding: 20px;
+      }
+
+      h1 {
+        margin-bottom: 16px;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Inventory</h1>
+
+  <div class="toolbar">
+    <button onclick="openModal()">Add Item</button>
+    <button class="secondary" onclick="exportPDF()">Export as PDF</button>
+  </div>
+
+  <div id="list-container">
+    <p class="empty-note" id="empty-note">No items in inventory yet.</p>
+    <table id="inventory-list" style="display:none;">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Item</th>
+          <th style="text-align:right;">Quantity</th>
+          <th style="text-align:right;"></th>
+        </tr>
+      </thead>
+      <tbody id="inventory-body">
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Modal -->
+  <div class="modal-overlay" id="modal-overlay">
+    <div class="modal">
+      <h2>Add Item</h2>
+
+      <label>Search item</label>
+      <input
+        type="text"
+        id="search-input"
+        placeholder="Type to search..."
+        oninput="onSearch()"
+        autocomplete="off"
+      />
+
+      <div id="search-results"></div>
+
+      <label>Quantity</label>
+      <input
+        type="number"
+        id="qty-input"
+        value="1"
+        min="1"
+      />
+
+      <div class="modal-actions">
+        <button class="secondary" onclick="closeModal()">Cancel</button>
+        <button onclick="addItem()">Add</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ----------
+    // ITEM-LISTE
+    // ---------
+    const ITEM_LIST = [
+      "Penis",
+      "Muschi"
+      
+    ];
+    // -------------------------------------------------------
+
+    let inventory = JSON.parse(localStorage.getItem("inventory") || "[]");
+    let selectedItem = null;
+
+    function save() {
+      localStorage.setItem("inventory", JSON.stringify(inventory));
+    }
+
+    function render() {
+      const body = document.getElementById("inventory-body");
+      const table = document.getElementById("inventory-list");
+      const emptyNote = document.getElementById("empty-note");
+
+      body.innerHTML = "";
+
+      if (inventory.length === 0) {
+        table.style.display = "none";
+        emptyNote.style.display = "";
+        return;
+      }
+
+      table.style.display = "";
+      emptyNote.style.display = "none";
+
+      inventory.forEach((entry, index) => {
+        const row = document.createElement("tr");
+        row.innerHTML = `
+          <td>${index + 1}</td>
+          <td>${escapeHtml(entry.name)}</td>
+          <td style="text-align:right;">${entry.qty}</td>
+          <td style="text-align:right;">
+            <button class="btn-delete no-print" onclick="deleteItem(${index})">Remove</button>
+          </td>
+        `;
+        body.appendChild(row);
+      });
+    }
+
+    function deleteItem(index) {
+      inventory.splice(index, 1);
+      save();
+      render();
+    }
+
+    function openModal() {
+      selectedItem = null;
+      document.getElementById("search-input").value = "";
+      document.getElementById("qty-input").value = "1";
+      document.getElementById("search-results").innerHTML = "";
+      document.getElementById("modal-overlay").classList.add("open");
+      document.getElementById("search-input").focus();
+    }
+
+    function closeModal() {
+      document.getElementById("modal-overlay").classList.remove("open");
+    }
+
+    function onSearch() {
+      const query = document.getElementById("search-input").value.toLowerCase().trim();
+      const container = document.getElementById("search-results");
+      container.innerHTML = "";
+      selectedItem = null;
+
+      if (!query) return;
+
+      const matches = ITEM_LIST.filter(item =>
+        item.toLowerCase().includes(query)
+      );
+
+      matches.forEach(item => {
+        const div = document.createElement("div");
+        div.className = "result-item";
+        div.textContent = item;
+        div.onclick = () => selectResult(div, item);
+        container.appendChild(div);
+      });
+
+      if (matches.length === 0) {
+        container.innerHTML = '<div style="padding:8px 10px;font-size:0.85rem;color:#888;">No results.</div>';
+      }
+    }
+
+    function selectResult(el, item) {
+      document.querySelectorAll(".result-item").forEach(r => r.classList.remove("selected"));
+      el.classList.add("selected");
+      selectedItem = item;
+      document.getElementById("qty-input").focus();
+    }
+
+    function addItem() {
+      if (!selectedItem) {
+        alert("Please select an item from the list first.");
+        return;
+      }
+
+      const qty = parseInt(document.getElementById("qty-input").value, 10);
+      if (!qty || qty < 1) {
+        alert("Please enter a valid quantity.");
+        return;
+      }
+
+      const existing = inventory.find(e => e.name === selectedItem);
+      if (existing) {
+        existing.qty += qty;
+      } else {
+        inventory.push({ name: selectedItem, qty });
+      }
+
+      save();
+      render();
+      closeModal();
+    }
+
+    function exportPDF() {
+      window.print();
+    }
+
+    function escapeHtml(str) {
+      return str
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+    }
+
+    // Close modal on Escape
+    document.addEventListener("keydown", e => {
+      if (e.key === "Escape") closeModal();
+    });
+
+    // Close modal on overlay click
+    document.getElementById("modal-overlay").addEventListener("click", function(e) {
+      if (e.target === this) closeModal();
+    });
+
+    render();
+  </script>
+
+</body>
+</html>
