@@ -2,5 +2,6 @@
 !.gitignore
 !index.html
 !items.json
+!README.md
 !.github/
 !.github/**
